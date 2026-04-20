@@ -12,8 +12,22 @@ const ingestZone = document.getElementById("ingestZone");
 const ingestCount = document.getElementById("ingestCount");
 const ingestSource = document.getElementById("ingestSource");
 const ingestBtn = document.getElementById("ingestBtn");
+const clearFeedsBtn = document.getElementById("clearFeedsBtn");
 const ingestStatus = document.getElementById("ingestStatus");
 const ingestFeedList = document.getElementById("ingestFeedList");
+const flashDealZone = document.getElementById("flashDealZone");
+const flashDealDiscount = document.getElementById("flashDealDiscount");
+const flashDealDuration = document.getElementById("flashDealDuration");
+const flashDealBtn = document.getElementById("flashDealBtn");
+const flashDealClearBtn = document.getElementById("flashDealClearBtn");
+const flashDealStatus = document.getElementById("flashDealStatus");
+const flashDealBadge = document.getElementById("flashDealBadge");
+const replaySlider = document.getElementById("replaySlider");
+const replayModeBadge = document.getElementById("replayModeBadge");
+const replayTickLabel = document.getElementById("replayTickLabel");
+const replayLiveBtn = document.getElementById("replayLiveBtn");
+const replayBackBtn = document.getElementById("replayBackBtn");
+const replayForwardBtn = document.getElementById("replayForwardBtn");
 
 // KPIs
 const kpiAvgWait = document.getElementById("kpiAvgWait");
@@ -35,6 +49,7 @@ const gatesContainer = document.getElementById("gatesContainer");
 const alertsList = document.getElementById("alertsList");
 const historyList = document.getElementById("historyList");
 const escalatedBadge = document.getElementById("escalatedBadge");
+const opsEventList = document.getElementById("opsEventList");
 
 // State
 let gridWidth = 40;
@@ -45,6 +60,9 @@ let maxDensity = 1;
 let currentPhase = "ENTRY";
 let gateFutureCache = {};
 let latestAlerts = [];
+let latestHistorySnapshots = [];
+let replayModeLive = true;
+let replayIndex = -1;
 
 function toCanvas(x, y) {
   return {
@@ -159,8 +177,28 @@ function getTrendIcon(val) {
   return `<span style="color:var(--text-muted)">→ 0</span>`;
 }
 
-function renderGateCards(waits, trends, utils, forecasts) {
+function buildZoneSparklineSeries(historyItems) {
+  const zonesToRender = ["Gate A", "Gate B", "Gate C", "Gate D", "Food Court", "Exit"];
+  const series = {};
+  zonesToRender.forEach((zone) => {
+    series[zone] = [];
+  });
+
+  historyItems.slice(-12).forEach((item) => {
+    zonesToRender.forEach((zone) => {
+      const waitVal = item?.waits?.[zone];
+      const countVal = item?.counts?.[zone];
+      const point = Number.isFinite(waitVal) ? waitVal : Number.isFinite(countVal) ? countVal : 0;
+      series[zone].push(point);
+    });
+  });
+
+  return series;
+}
+
+function renderGateCards(waits, trends, utils, forecasts, historyItems = []) {
   gatesContainer.innerHTML = "";
+  const sparklineSeries = buildZoneSparklineSeries(historyItems);
   
   const targetZones = ["Gate A", "Gate B", "Gate C", "Gate D", "Food Court", "Exit"];
   
@@ -205,6 +243,7 @@ function renderGateCards(waits, trends, utils, forecasts) {
       <div class="util-bar-container">
         <div class="util-bar" style="width: ${Math.min(100, util)}%; background: ${utilColor}"></div>
       </div>
+      <div class="spark-wrap">${buildSparkline(sparklineSeries[zone] || [])}</div>
     `;
     gatesContainer.appendChild(card);
   });
@@ -233,23 +272,86 @@ function renderHistory(historyItems) {
     const card = document.createElement("div");
     card.className = "alert-card alert-green";
     const peakZone = item.counts ? Object.entries(item.counts).sort((a, b) => b[1] - a[1])[0] : ["N/A", 0];
+    const phaseText = item.phase || currentPhase || "LIVE";
+    const maxDensityValue = item.max_density ?? "--";
     card.innerHTML = `
       <div class="ac-header">
         <span class="ac-zone">TICK ${item.tick}</span>
-        <span class="ac-eta">${item.phase}</span>
+        <span class="ac-eta">${phaseText}</span>
       </div>
       <div class="ac-issue">Peak zone: ${peakZone[0]}</div>
-      <div class="ac-action">Max density: ${item.max_density} | Zones sampled: ${Object.keys(item.counts || {}).length}</div>
+      <div class="ac-action">Max density: ${maxDensityValue} | Zones sampled: ${Object.keys(item.counts || {}).length}</div>
     `;
     historyList.appendChild(card);
   });
 }
 
+function waitsToUtilizations(waits = {}) {
+  const utils = {};
+  Object.entries(waits).forEach(([zone, wait]) => {
+    if (zone === "Seating") return;
+    utils[zone] = Math.round(Math.min(100, (Number(wait || 0) / 15.0) * 100) * 10) / 10;
+  });
+  return utils;
+}
+
+function updateReplayControls() {
+  const maxIndex = Math.max(0, latestHistorySnapshots.length - 1);
+  replaySlider.max = String(maxIndex);
+  replaySlider.value = String(Math.max(0, replayIndex));
+
+  if (replayModeLive || replayIndex < 0) {
+    replayModeBadge.textContent = "Live mode";
+    replayTickLabel.textContent = "Latest snapshot";
+    return;
+  }
+
+  replayModeBadge.textContent = "Replay mode";
+  const snap = latestHistorySnapshots[replayIndex];
+  replayTickLabel.textContent = snap ? `Replay tick ${snap.tick || replayIndex}` : "Replay snapshot";
+}
+
+function renderReplayFrame() {
+  const snap = latestHistorySnapshots[replayIndex];
+  if (!snap) return;
+  const waits = snap.waits || {};
+  renderGateCards(waits, {}, waitsToUtilizations(waits), waits, latestHistorySnapshots);
+}
+
+function renderOpsEvents(events = []) {
+  if (!opsEventList) return;
+  opsEventList.innerHTML = "";
+
+  const items = events.slice(0, 14);
+  if (!items.length) {
+    const empty = document.createElement("div");
+    empty.className = "alert-card alert-green";
+    empty.textContent = "No operations events yet.";
+    opsEventList.appendChild(empty);
+    return;
+  }
+
+  items.forEach((entry) => {
+    const card = document.createElement("div");
+    card.className = "alert-card alert-green";
+    const ts = Number(entry.timestamp || 0) * 1000;
+    const timeText = Number.isFinite(ts) && ts > 0 ? new Date(ts).toLocaleTimeString() : "just now";
+    card.innerHTML = `
+      <div class="ac-header">
+        <span class="ac-zone">${String(entry.type || "ops").toUpperCase()}</span>
+        <span class="ac-eta">${timeText}</span>
+      </div>
+      <div class="ac-issue">${entry.message || "Operational event"}</div>
+    `;
+    opsEventList.appendChild(card);
+  });
+}
+
 function renderKPIs(kpis, aiDecisions) {
   kpiAvgWait.textContent = `${kpis.avg_wait_min} min`;
-  kpiMaxCong.textContent = kpis.max_congestion_zone.toUpperCase();
+  kpiMaxCong.textContent = (kpis.max_congestion_zone || "--").toUpperCase();
   kpiThroughput.textContent = `${kpis.throughput} /min`;
-  kpiStatus.textContent = kpis.system_status.toUpperCase();
+  kpiStatus.textContent = (kpis.system_status || "stable").toUpperCase();
   
   kpiStatus.className = "kpi-value";
   if (kpis.system_status === "Critical") kpiStatus.classList.add("status-critical");
@@ -263,14 +365,14 @@ function renderKPIs(kpis, aiDecisions) {
 
 function renderAIPanel(ai) {
   if (!ai) return;
-  
-  aiDecision.textContent = ai.decision;
-  aiTimeSaved.textContent = `${ai.impact.time_saved_per_user} min`;
-  aiAffected.textContent = ai.impact.affected_users;
-  aiConfidence.textContent = `${ai.confidence} Confidence`;
+  const impact = ai.impact || {};
+  aiDecision.textContent = ai.decision || "Monitoring live crowd behavior.";
+  aiTimeSaved.textContent = `${Number(impact.time_saved_per_user || 0).toFixed(1)} min`;
+  aiAffected.textContent = String(impact.affected_users || 0);
+  aiConfidence.textContent = `${ai.confidence || "Medium"} Confidence`;
   
   aiReasoningList.innerHTML = "";
-  ai.reasoning.forEach(r => {
+  (ai.reasoning || ["Collecting decision telemetry from active zones."]).forEach(r => {
     const li = document.createElement("li");
     li.textContent = r;
     aiReasoningList.appendChild(li);
@@ -282,21 +384,81 @@ function renderAlerts(alerts) {
   latestAlerts = alerts;
   
   alerts.forEach(a => {
+    const severity = (a.severity || "GREEN").toUpperCase();
+    const zone = a.zone || "Unknown zone";
+    const rawMessage = a.message || "";
+    const issue = a.issue || (rawMessage.includes("|") ? rawMessage.split("|")[0].trim() : rawMessage || "Operational update");
+    const action = a.action || (rawMessage.includes("|") ? rawMessage.split("|")[1].trim() : "Monitor this zone");
+    const eta = a.eta || "TBD";
+
     const card = document.createElement("div");
-    card.className = `alert-card alert-${a.severity.toLowerCase()}`;
+    card.className = `alert-card alert-${severity.toLowerCase()}`;
     card.dataset.alertId = a.alert_id || "";
     
     card.innerHTML = `
       <div class="ac-header">
-        <span class="ac-zone">${a.zone.toUpperCase()}</span>
-        <span class="ac-eta">ETA: ${a.eta}</span>
+        <span class="ac-zone">${zone.toUpperCase()}</span>
+        <span class="ac-eta">ETA: ${eta}</span>
       </div>
-      <div class="ac-issue">${a.issue}</div>
-      <div class="ac-action">Action: ${a.action}</div>
-      ${a.severity !== "GREEN" ? `<button class="ack-btn" data-alert-id="${a.alert_id || ""}">ACK</button>` : ""}
+      <div class="ac-issue">${issue}</div>
+      <div class="ac-action">Action: ${action}</div>
+      <div class="alert-actions">
+        ${severity !== "GREEN" && !a.acknowledged ? `<button class="ack-btn" data-alert-id="${a.alert_id || ""}">ACK</button>` : ""}
+        ${severity !== "GREEN" ? `<button class="ack-btn resolve-btn" data-alert-id="${a.alert_id || ""}">Resolve</button>` : ""}
+        ${a.acknowledged ? `<span class="ack-label">ACK by ${a.acknowledged_by || "staff"}</span>` : ""}
+      </div>
     `;
     alertsList.appendChild(card);
   });
+}
+
+function renderFlashDealStatus(deal) {
+  if (!deal || !deal.active) {
+    flashDealBadge.textContent = "No active deal";
+    flashDealStatus.textContent = "No active flash deal.";
+    return;
+  }
+
+  const minsLeft = Math.max(1, Math.ceil((deal.remaining_seconds || 0) / 60));
+  flashDealBadge.textContent = `${deal.discount_percent}% live`;
+  flashDealStatus.textContent = `${deal.discount_percent}% discount at ${deal.zone} | ${minsLeft}m left`;
+}
+
+async function refreshFlashDealStatus() {
+  const res = await fetch(`${API_BASE}/ops/flash-deal`);
+  if (!res.ok) return;
+  const deal = await res.json();
+  renderFlashDealStatus(deal);
+}
+
+async function launchFlashDeal() {
+  const payload = {
+    active: true,
+    zone: flashDealZone?.value || "Food Court",
+    discount_percent: Number(flashDealDiscount?.value || 30),
+    duration_minutes: Number(flashDealDuration?.value || 15),
+    triggered_by: "dashboard_operator",
+  };
+
+  const res = await fetch(`${API_BASE}/ops/flash-deal`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) return;
+  const deal = await res.json();
+  renderFlashDealStatus(deal);
+}
+
+async function clearFlashDeal() {
+  const res = await fetch(`${API_BASE}/ops/flash-deal`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ active: false }),
+  });
+  if (!res.ok) return;
+  const deal = await res.json();
+  renderFlashDealStatus(deal);
 }
 
 function renderFeeds(feeds) {
@@ -309,26 +471,6 @@ function renderFeeds(feeds) {
     else badge.classList.add("feed-bad");
     badge.textContent = `${feed.zone}: ${feed.count} (${feed.source}, ${feed.age_seconds}s)`;
     ingestFeedList.appendChild(badge);
-  });
-}
-
-function renderHistory(historyItems) {
-  historyList.innerHTML = "";
-
-  const items = [...historyItems].slice(-8).reverse();
-  items.forEach((item) => {
-    const card = document.createElement("div");
-    card.className = "alert-card alert-green";
-    const peakZone = item.counts ? Object.entries(item.counts).sort((a, b) => b[1] - a[1])[0] : ["N/A", 0];
-    card.innerHTML = `
-      <div class="ac-header">
-        <span class="ac-zone">TICK ${item.tick}</span>
-        <span class="ac-eta">${item.phase}</span>
-      </div>
-      <div class="ac-issue">Peak zone: ${peakZone[0]}</div>
-      <div class="ac-action">Max density: ${item.max_density} | Zones sampled: ${Object.keys(item.counts || {}).length}</div>
-    `;
-    historyList.appendChild(card);
   });
 }
 
@@ -394,7 +536,32 @@ async function refreshIngestStatus() {
   const res = await fetch(`${API_BASE}/ingest/status`);
   if (!res.ok) return;
   const data = await res.json();
-  renderFeeds(data.feeds || []);
+  const feeds = data.feeds || [];
+  renderFeeds(feeds);
+  if (!feeds.length) {
+    ingestStatus.textContent = "No live feed overrides active.";
+  }
+}
+
+async function clearAllFeeds() {
+  const active = (await (await fetch(`${API_BASE}/ingest/status`)).json()).feeds || [];
+  if (!active.length) {
+    ingestStatus.textContent = "No active feeds to clear.";
+    return;
+  }
+
+  await Promise.all(
+    active.map((feed) =>
+      fetch(`${API_BASE}/ingest`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ zone: feed.zone, count: 0, source: "manual_staff" }),
+      })
+    )
+  );
+
+  ingestStatus.textContent = "Cleared feed overrides.";
+  await refreshIngestStatus();
 }
 
 async function refreshFuturePredictions() {
@@ -411,7 +578,7 @@ async function refreshFuturePredictions() {
 
 async function refreshData() {
   try {
-    const [simRes, heatRes, predRes, sugRes, kpiRes, historyRes, staffRes, escalatedRes] = await Promise.all([
+    const [simRes, heatRes, predRes, sugRes, kpiRes, historyRes, staffRes, escalatedRes, opsEventsRes] = await Promise.all([
       fetch(`${API_BASE}/simulate`),
       fetch(`${API_BASE}/heatmap`),
       fetch(`${API_BASE}/predict`),
@@ -419,7 +586,8 @@ async function refreshData() {
       fetch(`${API_BASE}/kpi`),
       fetch(`${API_BASE}/history`),
       fetch(`${API_BASE}/staff/alerts`),
-      fetch(`${API_BASE}/staff/alerts/escalated`)
+      fetch(`${API_BASE}/staff/alerts/escalated`),
+      fetch(`${API_BASE}/ops/events`)
     ]);
 
     const simData = await simRes.json();
@@ -430,6 +598,7 @@ async function refreshData() {
     const historyData = await historyRes.json();
     const staffAlerts = await staffRes.json();
     const escalatedAlerts = await escalatedRes.json();
+    const opsEventsData = await opsEventsRes.json();
 
     gridWidth = simData.grid.width;
     gridHeight = simData.grid.height;
@@ -446,18 +615,28 @@ async function refreshData() {
     maxDensity = heatData.max_density;
 
     renderCanvas();
-    renderGateCards(
-      predData.wait_times,
-      predData.trends,
-      predData.utilizations,
-      predData.forecast_wait_times || {}
-    );
+    latestHistorySnapshots = historyData.snapshots || historyData.items || [];
+    if (replayModeLive || replayIndex < 0) {
+      renderGateCards(
+        predData.wait_times,
+        predData.trends,
+        predData.utilizations,
+        predData.forecast_wait_times || {},
+        latestHistorySnapshots
+      );
+    } else {
+      replayIndex = Math.min(replayIndex, Math.max(0, latestHistorySnapshots.length - 1));
+      renderReplayFrame();
+    }
     renderKPIs(kpiData, sugData.decision);
     renderAIPanel(sugData.decision);
     renderAlerts((staffAlerts && staffAlerts.length ? staffAlerts : sugData.alerts) || []);
-    renderHistory(historyData.snapshots || historyData.items || []);
+    renderHistory(latestHistorySnapshots);
+    renderOpsEvents(opsEventsData.events || []);
+    updateReplayControls();
     await refreshIngestStatus();
     await refreshFuturePredictions();
+    await refreshFlashDealStatus();
 
     if (escalatedAlerts && escalatedAlerts.length) {
       alertsList.classList.add("panel-flash");
@@ -492,6 +671,13 @@ ingestBtn.addEventListener("click", async () => {
   await submitIngest();
 });
 
+if (clearFeedsBtn) {
+  clearFeedsBtn.addEventListener("click", async () => {
+    await clearAllFeeds();
+    await refreshData();
+  });
+}
+
 document.querySelectorAll("[data-feed-source]").forEach((button) => {
   button.addEventListener("click", async () => {
     if (ingestSource) {
@@ -505,6 +691,19 @@ alertsList.addEventListener("click", async (event) => {
   const button = event.target.closest(".ack-btn");
   if (!button) return;
   const alertId = button.dataset.alertId;
+  const isResolve = button.classList.contains("resolve-btn");
+
+  if (isResolve) {
+    const resolveRes = await fetch(`${API_BASE}/staff/alerts/resolve`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ alert_id: alertId }),
+    });
+    if (!resolveRes.ok) return;
+    await refreshData();
+    return;
+  }
+
   const staffName = window.prompt("Staff name?");
   if (!staffName) return;
 
@@ -517,5 +716,54 @@ alertsList.addEventListener("click", async (event) => {
   await refreshData();
 });
 
+if (flashDealBtn) {
+  flashDealBtn.addEventListener("click", async () => {
+    await launchFlashDeal();
+  });
+}
+
+if (flashDealClearBtn) {
+  flashDealClearBtn.addEventListener("click", async () => {
+    await clearFlashDeal();
+  });
+}
+
+if (replaySlider) {
+  replaySlider.addEventListener("input", () => {
+    replayModeLive = false;
+    replayIndex = Number(replaySlider.value || 0);
+    updateReplayControls();
+    renderReplayFrame();
+  });
+}
+
+if (replayLiveBtn) {
+  replayLiveBtn.addEventListener("click", () => {
+    replayModeLive = true;
+    replayIndex = -1;
+    updateReplayControls();
+  });
+}
+
+if (replayBackBtn) {
+  replayBackBtn.addEventListener("click", () => {
+    if (!latestHistorySnapshots.length) return;
+    replayModeLive = false;
+    replayIndex = Math.max(0, (replayIndex < 0 ? latestHistorySnapshots.length - 1 : replayIndex - 1));
+    updateReplayControls();
+    renderReplayFrame();
+  });
+}
+
+if (replayForwardBtn) {
+  replayForwardBtn.addEventListener("click", () => {
+    if (!latestHistorySnapshots.length) return;
+    replayModeLive = false;
+    replayIndex = Math.min(latestHistorySnapshots.length - 1, Math.max(0, replayIndex + 1));
+    updateReplayControls();
+    renderReplayFrame();
+  });
+}
+
 refreshData();
-setInterval(refreshData, 1200);
+setInterval(refreshData, 2500);

@@ -10,46 +10,114 @@
     <link rel="stylesheet" href="attendee.css" />
   </head>
   <body>
-    <main class="attendee-shell">
-      <section class="hero">
-        <p class="eyebrow">SmartCrowd Attendee View</p>
+    <main class="phone-shell">
+      <header class="phone-header">
+        <p class="eyebrow">VenueIQ Fan Portal</p>
         <h1 id="headline">Loading live route guidance...</h1>
-        <p>
-          Follow the fastest gate, see your current wait estimate, and stay in sync with live venue operations.
-        </p>
+      </header>
+
+      <section id="notificationCard" class="notification hidden">
+        <div class="notification-head">
+          <strong id="notifTitle">Notification</strong>
+          <button id="dismissNotif" class="ghost-btn" type="button">Dismiss</button>
+        </div>
+        <p id="notifBody">No active notifications.</p>
+        <button id="notifAction" class="primary-btn hidden" type="button">Take Action</button>
       </section>
 
-      <section class="route-card">
-        <div class="route-label">Recommended gate</div>
-        <div class="route-value" id="bestGate">--</div>
-        <div class="route-meta" id="bestMeta">Waiting for the live model.</div>
+      <section id="tabHub" class="tab-screen">
+        <section class="hero-card">
+          <div>
+            <p class="eyebrow">Live Recommendation</p>
+            <h2 id="bestGate">--</h2>
+            <p id="bestMeta" class="muted">Waiting for the live model.</p>
+            <p id="fanPoints" class="muted">Points: 450</p>
+          </div>
+          <button id="acceptRoute" class="primary-btn" type="button">Accept Route +100 pts</button>
+        </section>
+
+        <section class="stats-grid">
+          <article>
+            <span>Current wait</span>
+            <strong id="waitTime">--</strong>
+          </article>
+          <article>
+            <span>Forecast</span>
+            <strong id="forecast">--</strong>
+          </article>
+          <article>
+            <span>Confidence</span>
+            <strong id="confidence">--</strong>
+          </article>
+          <article>
+            <span>Venue status</span>
+            <strong id="status">--</strong>
+          </article>
+        </section>
+
+        <section class="ticket-card" id="ticketCard">
+          <div class="ticket-head">
+            <span>General Admission</span>
+            <button id="toggleQr" class="ghost-btn" type="button">Show QR</button>
+          </div>
+          <h3>Section 102</h3>
+          <div id="qrArea" class="qr-area hidden">
+            <div class="qr-box">VENUEIQ QR</div>
+            <p id="qrHint">Scan at the recommended gate.</p>
+          </div>
+        </section>
+
+        <section class="alerts">
+          <h2>Why this route</h2>
+          <ul id="reasonList">
+            <li>Waiting for live recommendations.</li>
+          </ul>
+        </section>
       </section>
 
-      <section class="stats-grid">
-        <article>
-          <span>Current wait</span>
-          <strong id="waitTime">--</strong>
-        </article>
-        <article>
-          <span>Forecast</span>
-          <strong id="forecast">--</strong>
-        </article>
-        <article>
-          <span>Confidence</span>
-          <strong id="confidence">--</strong>
-        </article>
-        <article>
-          <span>Venue status</span>
-          <strong id="status">--</strong>
-        </article>
+      <section id="tabMap" class="tab-screen hidden">
+        <section class="hero-card">
+          <p class="eyebrow">Navigation</p>
+          <h2 id="navGate">--</h2>
+          <p id="navMeta" class="muted">Accept route to begin guidance.</p>
+          <button id="toggleNav" class="primary-btn" type="button">Start Guidance</button>
+        </section>
+        <section class="map-card">
+          <div id="mapStatus" class="map-status">Navigation idle</div>
+          <div class="map-grid">
+            <span>Gate A</span>
+            <span>Gate B</span>
+            <span>Gate C</span>
+            <span>Food Court</span>
+            <span>Seating</span>
+            <span>Exit</span>
+          </div>
+        </section>
       </section>
 
-      <section class="alerts">
-        <h2>Why this route</h2>
-        <ul id="reasonList">
-          <li>Waiting for live recommendations.</li>
-        </ul>
+      <section id="tabEat" class="tab-screen hidden">
+        <section class="hero-card">
+          <p class="eyebrow">Concessions</p>
+          <h2>Live offers</h2>
+          <p id="dealMeta" class="muted">No active discount.</p>
+        </section>
+
+        <section id="menuList" class="menu-list"></section>
+
+        <section id="cartPanel" class="cart-panel hidden">
+          <div class="ticket-head">
+            <span>Cart Total</span>
+            <strong id="cartTotal">$0.00</strong>
+          </div>
+          <button id="checkoutBtn" class="primary-btn" type="button">Pay Securely</button>
+        </section>
       </section>
+
+      <footer class="tab-bar">
+        <button class="tab-btn active" data-tab="hub" type="button">Hub</button>
+        <button class="tab-btn" data-tab="map" type="button">Map</button>
+        <button class="tab-btn" data-tab="eat" type="button">Eat</button>
+      </footer>
     </main>
 
     <script src="attendee.js"></script>

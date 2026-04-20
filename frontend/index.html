@@ -169,6 +169,26 @@
           </div>
         </div>
 
+        <div class="panel deal-panel">
+          <header class="panel-header">
+            <h2>Flash Deal Control</h2>
+            <span class="badge" id="flashDealBadge">No active deal</span>
+          </header>
+          <div class="scenario-controls ingest-grid">
+            <select id="flashDealZone" class="styled-select">
+              <option value="Food Court">Zone: Food Court</option>
+              <option value="Concession">Zone: Concession</option>
+            </select>
+            <input id="flashDealDiscount" class="styled-input" type="number" min="5" max="70" value="30" />
+            <input id="flashDealDuration" class="styled-input" type="number" min="1" max="60" value="15" />
+            <div class="button-row">
+              <button id="flashDealBtn" class="primary-btn">Launch Flash Deal</button>
+              <button id="flashDealClearBtn" class="primary-btn secondary-btn">End Deal</button>
+            </div>
+            <div id="flashDealStatus" class="subtle-copy">No active flash deal.</div>
+          </div>
+        </div>
+
         <!-- Live Operations Alerts -->
         <div class="panel alerts-panel">
           <header class="panel-header">
@@ -185,7 +205,26 @@
           <header class="panel-header">
             <h2>Historical Replay</h2>
           </header>
+          <div class="scenario-controls replay-controls">
+            <div class="replay-meta">
+              <span id="replayModeBadge" class="badge">Live mode</span>
+              <span id="replayTickLabel" class="subtle-copy">Latest snapshot</span>
+            </div>
+            <input id="replaySlider" type="range" min="0" max="0" value="0" />
+            <div class="button-row replay-buttons">
+              <button id="replayLiveBtn" class="primary-btn secondary-btn">Back To Live</button>
+              <button id="replayBackBtn" class="primary-btn secondary-btn">Step Back</button>
+              <button id="replayForwardBtn" class="primary-btn secondary-btn">Step Forward</button>
+            </div>
+          </div>
           <div class="alerts-container" id="historyList"></div>
+        </div>
+
+        <div class="panel ops-panel">
+          <header class="panel-header">
+            <h2>Operations Event Stream</h2>
+          </header>
+          <div class="alerts-container" id="opsEventList"></div>
         </div>
 
       </aside>

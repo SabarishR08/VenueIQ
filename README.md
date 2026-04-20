@@ -18,7 +18,9 @@ This project simulates real-time crowd movement on a stadium grid and exposes AP
 - Event phase engine: `ENTRY`, `MID_GAME`, `HALFTIME`, `EXIT`
 - Mock sensor ingestion via `/ingest` for camera, Wi-Fi, ticket scanner, and staff observations
 - Rolling history replay via `/history`
+- Replay scrubber and operations event timeline in dashboard
 - Attendee-facing route guidance at `/attendee`
+- Flash-deal operator controls with live attendee offer sync
 - Grid heatmap density visualization
 - Queue prediction using `wait_time = crowd_count / capacity_per_minute`
 - Trend tracking (`current - previous`) for congestion direction
@@ -49,6 +51,10 @@ Runtime:
 - `GET /history` - recent replay snapshots
 - `GET /suggest` - explainable suggestions + live alerts
 - `GET /scenario` - read phase or set via `?phase=ENTRY|MID_GAME|HALFTIME|EXIT`
+- `GET /fan/state` - unified attendee state (recommendation, KPIs, offer, escalations)
+- `GET /ops/flash-deal` - flash deal status
+- `POST /ops/flash-deal` - trigger or end flash deal
+- `GET /ops/events` - merged operations + simulation event stream
 
 ## Run Locally
 1. Create and activate a virtual environment.
@@ -65,6 +71,20 @@ Runtime:
 4. gcloud run deploy smartcrowd-ai --source . --region asia-south1 --allow-unauthenticated
 
 This deployment path uses Google Cloud Build to build from source. No local Docker installation is required.
+
+## One-Command Release (Push + Deploy)
+Use the PowerShell automation script:
+
+`./scripts/release.ps1 -CommitMessage "feat: timeline and event stream"`
+
+Optional switches:
+- `-SkipPush` to skip GitHub push
+- `-SkipDeploy` to skip Cloud Run deployment
+
+Optional overrides:
+- `-ProjectId YOUR_PROJECT_ID`
+- `-Service YOUR_CLOUD_RUN_SERVICE`
+- `-Region asia-south1`
 
 ## Privacy Note
 - This prototype uses simulated, anonymous data only.

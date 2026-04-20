@@ -1,3 +1,5 @@
+import time
+from collections import deque
 from pathlib import Path
 
 from flask import Flask, jsonify, request, send_from_directory
@@ -19,6 +21,7 @@ try:
     from .simulation import CrowdSimulation
     from .staff import acknowledge_alert, create_alert, get_active_alerts, get_escalated_alerts, resolve_alert
     from .venue_config import VENUE_PRESETS, get_venue
+    from .offers import clear_flash_deal, get_flash_deal, set_flash_deal
 except ImportError:
     from ingest import IngestPayload, KNOWN_ZONES, LIVE_COUNTS, apply_overrides, clear_stale_overrides, status_payload
     from predictor import (
@@ -36,6 +39,7 @@ except ImportError:
     from simulation import CrowdSimulation
     from staff import acknowledge_alert, create_alert, get_active_alerts, get_escalated_alerts, resolve_alert
     from venue_config import VENUE_PRESETS, get_venue
+    from offers import clear_flash_deal, get_flash_deal, set_flash_deal
 
 
 app = Flask(__name__)
@@ -50,6 +54,18 @@ sim = CrowdSimulation(
 )
 previous_waits = None
 FRONTEND_DIR = Path(__file__).resolve().parents[1] / "frontend"
+OPS_EVENTS = deque(maxlen=180)
+
+
+def log_event(event_type: str, message: str, payload: dict | None = None) -> None:
+    OPS_EVENTS.append(
+        {
+            "timestamp": time.time(),
+            "type": event_type,
+            "message": message,
+            "payload": payload or {},
+        }
+    )
 
 
 @app.get("/")
@@ -97,6 +113,11 @@ def ingest():
         "source": ingest_payload.source,
         "timestamp": ingest_payload.timestamp,
     }
+    log_event(
+        "ingest",
+        f"{ingest_payload.source} updated {zone} to {ingest_payload.count}",
+        {"zone": zone, "count": ingest_payload.count, "source": ingest_payload.source},
+    )
     return jsonify({"status": "accepted", "zone": zone, "count": ingest_payload.count, "source": ingest_payload.source})
 
 
@@ -122,6 +143,7 @@ def switch_venue():
         grid_width=venue["grid"]["width"],
         grid_height=venue["grid"]["height"],
     )
+    log_event("venue", f"Venue switched to {venue['name']}", {"venue": venue_name})
     return jsonify({"venue": venue_name, **venue})
 
 
@@ -147,6 +169,7 @@ def scenario():
     if auto_flag is not None:
         enabled = auto_flag.lower() in ("1", "true", "yes", "on")
         sim.set_auto_phase(enabled)
+        log_event("scenario", f"Auto phase {'enabled' if enabled else 'disabled'}", {"auto_phase": enabled})
 
     phase = request.args.get("phase")
     if not phase:
@@ -154,6 +177,7 @@ def scenario():
 
     try:
         updated = sim.set_phase(phase)
+        log_event("scenario", f"Phase changed to {updated}", {"phase": updated})
         return jsonify({"phase": updated, "auto_phase": sim.auto_phase, "allowed": ["ENTRY", "MID_GAME", "HALFTIME", "EXIT"]})
     except ValueError as exc:
         return jsonify({"error": str(exc), "auto_phase": sim.auto_phase, "allowed": ["ENTRY", "MID_GAME", "HALFTIME", "EXIT"]}), 400
@@ -266,6 +290,96 @@ def predict_future_route():
     )
 
 
+def _recommended_gate_from_decision(decision_text: str) -> str:
+    if " to " not in decision_text:
+        return "Gate A"
+    return decision_text.split(" to ")[-1].strip()
+
+
+def _build_live_state() -> dict:
+    counts = apply_overrides(sim.fused_zone_counts())
+    waits = predict_wait_times(counts)
+    trend_map = compute_trends(waits, previous_waits)
+    suggestions_data = generate_suggestions(counts, waits, trend_map)
+    forecast = forecast_from_history(counts, list(sim.history), horizon_minutes=5)
+    kpis = build_kpis(waits, suggestions_data["alerts"], estimate_throughput(sim.phase))
+    decision_text = suggestions_data["decision"].get("decision", "Redirect traffic from Gate B to Gate A")
+    recommended_gate = _recommended_gate_from_decision(decision_text)
+
+    return {
+        "phase": sim.phase,
+        "recommended_gate": recommended_gate,
+        "decision": suggestions_data["decision"],
+        "wait_times": waits,
+        "forecast_wait_times": forecast,
+        "kpi": kpis,
+    }
+
+
+@app.get("/fan/state")
+def fan_state():
+    live_state = _build_live_state()
+    flash_deal = get_flash_deal()
+    return jsonify(
+        {
+            **live_state,
+            "flash_deal": flash_deal,
+            "escalated_count": len(get_escalated_alerts()),
+        }
+    )
+
+
+@app.get("/ops/flash-deal")
+def flash_deal_status():
+    return jsonify(get_flash_deal())
+
+
+@app.post("/ops/flash-deal")
+def trigger_flash_deal():
+    payload = request.get_json(silent=True) or {}
+    active = bool(payload.get("active", True))
+
+    if not active:
+        cleared = clear_flash_deal()
+        log_event("commerce", "Flash deal ended", cleared)
+        return jsonify(cleared)
+
+    zone = str(payload.get("zone", "Food Court")).strip() or "Food Court"
+    triggered_by = str(payload.get("triggered_by", "operator")).strip() or "operator"
+
+    try:
+        discount_percent = int(payload.get("discount_percent", 20))
+        duration_minutes = int(payload.get("duration_minutes", 15))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Invalid flash deal payload"}), 400
+
+    deal = set_flash_deal(
+        discount_percent=discount_percent,
+        duration_minutes=duration_minutes,
+        zone=zone,
+        triggered_by=triggered_by,
+    )
+    log_event("commerce", f"Flash deal launched: {deal['discount_percent']}% at {deal['zone']}", deal)
+    return jsonify(deal)
+
+
+@app.get("/ops/events")
+def ops_events():
+    sim_events = [
+        {
+            "timestamp": time.time(),
+            "type": f"sim_{entry.get('type', 'tick')}",
+            "message": f"Simulation {entry.get('type', 'tick')} event",
+            "payload": entry,
+        }
+        for entry in list(sim.event_log)
+    ]
+
+    merged = list(OPS_EVENTS) + sim_events
+    merged.sort(key=lambda entry: entry.get("timestamp", 0), reverse=True)
+    return jsonify({"events": merged[:80], "count": len(merged)})
+
+
 @app.get("/staff/alerts")
 def staff_alerts():
     return jsonify([alert.__dict__ for alert in get_active_alerts()])
@@ -277,6 +391,7 @@ def staff_ack():
     alert = acknowledge_alert(str(payload.get("alert_id", "")), str(payload.get("staff_name", "")))
     if not alert:
         return jsonify({"error": "Alert not found"}), 404
+    log_event("staff", f"Alert acknowledged by {alert.acknowledged_by}", {"alert_id": alert.alert_id, "zone": alert.zone})
     return jsonify(alert.__dict__)
 
 
@@ -286,6 +401,7 @@ def staff_resolve():
     alert = resolve_alert(str(payload.get("alert_id", "")))
     if not alert:
         return jsonify({"error": "Alert not found"}), 404
+    log_event("staff", "Alert resolved", {"alert_id": alert.alert_id, "zone": alert.zone})
     return jsonify(alert.__dict__)
 
 
