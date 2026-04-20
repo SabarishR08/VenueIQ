@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartCrowd Attendee</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="attendee.css" />
+  </head>
+  <body>
+    <main class="attendee-shell">
+      <section class="hero">
+        <p class="eyebrow">SmartCrowd Attendee View</p>
+        <h1 id="headline">Loading live route guidance...</h1>
+        <p>
+          Follow the fastest gate, see your current wait estimate, and stay in sync with live venue operations.
+        </p>
+      </section>
+
+      <section class="route-card">
+        <div class="route-label">Recommended gate</div>
+        <div class="route-value" id="bestGate">--</div>
+        <div class="route-meta" id="bestMeta">Waiting for the live model.</div>
+      </section>
+
+      <section class="stats-grid">
+        <article>
+          <span>Current wait</span>
+          <strong id="waitTime">--</strong>
+        </article>
+        <article>
+          <span>Forecast</span>
+          <strong id="forecast">--</strong>
+        </article>
+        <article>
+          <span>Confidence</span>
+          <strong id="confidence">--</strong>
+        </article>
+        <article>
+          <span>Venue status</span>
+          <strong id="status">--</strong>
+        </article>
+      </section>
+
+      <section class="alerts">
+        <h2>Why this route</h2>
+        <ul id="reasonList">
+          <li>Waiting for live recommendations.</li>
+        </ul>
+      </section>
+    </main>
+
+    <script src="attendee.js"></script>
+  </body>
+</html>

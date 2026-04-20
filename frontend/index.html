@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SmartCrowd Operations Intelligence</title>
+    <!-- Use Inter font for a modern, sleek look -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- Top Nav / Storytelling Layer -->
+    <nav class="top-nav">
+      <div class="nav-left">
+        <div class="logo">
+          <span class="logo-icon"></span>
+          <h1>SmartCrowd <span class="light">Intelligence</span></h1>
+        </div>
+        <div class="storytelling">
+          <span class="pulse"></span> AI is actively optimizing crowd movement in real time
+        </div>
+      </div>
+      <div class="nav-right">
+        <div id="impactText" class="impact-metric">Integration layer active: sensor feeds, forecasts, and staff actions aligned</div>
+      </div>
+    </nav>
+
+    <main class="dashboard">
+      <!-- LEFT COLUMN -->
+      <section class="left-col">
+        
+        <!-- KPI Strip -->
+        <div class="kpi-strip">
+          <div class="kpi-card">
+            <span class="kpi-label">Avg Wait Time</span>
+            <div class="kpi-value" id="kpiAvgWait">-- min</div>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Max Congestion Zone</span>
+            <div class="kpi-value" id="kpiMaxCong">--</div>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Crowd Throughput</span>
+            <div class="kpi-value" id="kpiThroughput">-- /min</div>
+          </div>
+          <div class="kpi-card" id="statusCard">
+            <span class="kpi-label">System Status</span>
+            <div class="kpi-value" id="kpiStatus">--</div>
+          </div>
+        </div>
+
+        <!-- Heatmap Map Focus -->
+        <div class="panel map-panel">
+          <header class="panel-header">
+            <h2>Live Thermal Mapping</h2>
+            <div class="legend">
+              <span>Low</span>
+              <div class="gradient-bar"></div>
+              <span>High</span>
+            </div>
+          </header>
+          <div class="canvas-wrapper">
+            <canvas id="stadiumCanvas" width="960" height="576"></canvas>
+          </div>
+        </div>
+
+        <!-- Gate Cards Grid -->
+        <div class="gates-grid" id="gatesContainer">
+          <!-- Gate cards injected via JS -->
+        </div>
+
+      </section>
+
+      <!-- RIGHT COLUMN -->
+      <aside class="right-col">
+        
+        <!-- Scenario Control -->
+        <div class="panel scenario-panel">
+          <header class="panel-header">
+            <h2>Simulation Scenario</h2>
+          </header>
+          <div class="scenario-controls">
+            <select id="phaseSelect" class="styled-select">
+              <option value="ENTRY">Phase: ENTRY RUSH</option>
+              <option value="MID_GAME">Phase: MID GAME</option>
+              <option value="HALFTIME">Phase: HALFTIME SURGE</option>
+              <option value="EXIT">Phase: EXIT RUSH</option>
+            </select>
+            <select id="venueSelect" class="styled-select">
+              <option value="stadium_a">Venue: City Stadium A</option>
+              <option value="arena_b">Venue: Indoor Arena B</option>
+            </select>
+            <label class="toggle-row">
+              <input id="autoPhaseToggle" type="checkbox" />
+              <span>Auto-detect phase from live crowd patterns</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Ingestion Panel -->
+        <div class="panel ingest-panel">
+          <header class="panel-header">
+            <h2>Mock Data Ingestion</h2>
+          </header>
+          <details class="data-feeds" open>
+            <summary>Data Feeds</summary>
+            <div class="scenario-controls ingest-grid">
+              <div class="button-row">
+                <button class="primary-btn" data-feed-source="camera_feed">Simulate Camera Feed</button>
+                <button class="primary-btn" data-feed-source="wifi_probe">Simulate WiFi Probe</button>
+                <button class="primary-btn" data-feed-source="manual_staff">Simulate Staff Count</button>
+              </div>
+              <select id="ingestSource" class="styled-select">
+                <option value="camera_feed">Camera Feed</option>
+                <option value="wifi_probe">WiFi Probe</option>
+                <option value="ticket_scanner">Ticket Scanner</option>
+                <option value="manual_staff">Manual Staff</option>
+              </select>
+              <select id="ingestZone" class="styled-select">
+                <option value="Gate A">Gate A</option>
+                <option value="Gate B">Gate B</option>
+                <option value="Gate C">Gate C</option>
+                <option value="Gate D">Gate D</option>
+                <option value="Food Court">Food Court</option>
+                <option value="Exit">Exit</option>
+                <option value="Gate North">Gate North</option>
+                <option value="Gate South">Gate South</option>
+                <option value="Gate East">Gate East</option>
+                <option value="Gate West">Gate West</option>
+                <option value="Concession">Concession</option>
+              </select>
+              <input id="ingestCount" class="styled-input" type="number" min="0" value="45" />
+              <button id="ingestBtn" class="primary-btn">Inject observation</button>
+              <button id="clearFeedsBtn" class="primary-btn secondary-btn">Clear All Feeds</button>
+              <div id="ingestStatus" class="subtle-copy">No external feed injected yet.</div>
+              <div id="ingestFeedList" class="feed-wrap"></div>
+            </div>
+          </details>
+        </div>
+
+        <!-- AI Decision Engine Panel -->
+        <div class="panel ai-panel">
+          <header class="panel-header">
+            <h2 class="ai-title">AI Decision Engine</h2>
+            <span class="badge" id="aiConfidence">High Confidence</span>
+          </header>
+          <div class="ai-content">
+            <h3 class="decision-text" id="aiDecision">Calculating optimal routing...</h3>
+            
+            <div class="impact-metrics">
+              <div class="im-box">
+                <span class="im-label">Time Saved / User</span>
+                <span class="im-val" id="aiTimeSaved">-- min</span>
+              </div>
+              <div class="im-box">
+                <span class="im-label">Affected Users</span>
+                <span class="im-val" id="aiAffected">--</span>
+              </div>
+            </div>
+
+            <div class="reasoning">
+              <h4>Reasoning</h4>
+              <ul id="aiReasoningList">
+                <li>Awaiting data...</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Operations Alerts -->
+        <div class="panel alerts-panel">
+          <header class="panel-header">
+            <h2>Live Operations Alerts</h2>
+            <span id="escalatedBadge" class="badge">No escalations</span>
+          </header>
+          <div class="alerts-container" id="alertsList">
+            <!-- Alerts injected via JS -->
+          </div>
+        </div>
+
+        <!-- History Panel -->
+        <div class="panel history-panel">
+          <header class="panel-header">
+            <h2>Historical Replay</h2>
+          </header>
+          <div class="alerts-container" id="historyList"></div>
+        </div>
+
+      </aside>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
